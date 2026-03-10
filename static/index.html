@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MSFS Tour Guide</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #4fc3f7;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Telemetry bar ── */
+    #telemetry-bar {
+      background: #0f3460;
+      padding: 6px 16px;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      font-size: 0.82rem;
+      font-family: 'Consolas', monospace;
+      color: #90caf9;
+      border-bottom: 1px solid #1a4a8a;
+      min-height: 30px;
+    }
+    .telem-item span.label { color: #546e7a; }
+    .telem-item span.value { color: #e0e0e0; font-weight: 600; }
+    #telem-status { color: #ef9a9a; font-style: italic; }
+
+    /* ── Chat area ── */
+    #chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      line-height: 1.5;
+      font-size: 0.93rem;
+    }
+    .message.user {
+      align-self: flex-start;
+      background: #0f3460;
+      border: 1px solid #1a4a8a;
+      color: #bbdefb;
+    }
+    .message.guide {
+      align-self: flex-start;
+      background: #16213e;
+      border: 1px solid #0d2137;
+      color: #e0e0e0;
+    }
+    .message .sender {
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .message.user .sender  { color: #4fc3f7; }
+    .message.guide .sender { color: #a5d6a7; }
+
+    .message.thinking .text {
+      color: #78909c;
+      font-style: italic;
+    }
+
+    /* ── Input area ── */
+    #input-area {
+      background: #16213e;
+      border-top: 1px solid #0f3460;
+      padding: 12px 16px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    #question-input {
+      flex: 1;
+      background: #0d1b2a;
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      padding: 10px 14px;
+      color: #e0e0e0;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #question-input:focus { border-color: #4fc3f7; }
+    #question-input::placeholder { color: #546e7a; }
+
+    button {
+      background: #0f3460;
+      color: #90caf9;
+      border: 1px solid #1a4a8a;
+      border-radius: 6px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s, color 0.2s;
+      white-space: nowrap;
+    }
+    button:hover  { background: #1a4a8a; color: #e0e0e0; }
+    button:active { background: #0d2137; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    #clear-btn {
+      background: transparent;
+      border-color: #37474f;
+      color: #546e7a;
+      padding: 10px 12px;
+      font-size: 0.8rem;
+    }
+    #clear-btn:hover { background: #0d1b2a; color: #90a4ae; border-color: #546e7a; }
+
+    /* ── Diagnostics ── */
+    .diag-panel {
+      font-family: 'Consolas', monospace;
+      font-size: 0.75rem;
+      background: #0a0f1a;
+      border: 1px solid #1a3a1a;
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-top: 4px;
+      color: #546e7a;
+      width: 100%;
+    }
+    .diag-panel .diag-row {
+      display: flex;
+      gap: 10px;
+      padding: 2px 0;
+      border-bottom: 1px solid #0f1f0f;
+    }
+    .diag-panel .diag-row:last-child { border-bottom: none; }
+    .diag-step  { color: #4caf50; min-width: 100px; }
+    .diag-ms    { color: #ff9800; min-width: 60px; text-align: right; }
+    .diag-total .diag-step { color: #4fc3f7; font-weight: bold; }
+    .diag-total .diag-ms   { color: #4fc3f7; font-weight: bold; }
+    .diag-detail { color: #78909c; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+    #diag-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 16px;
+      background: #0f1a0f;
+      border-bottom: 1px solid #1a3a1a;
+      font-size: 0.78rem;
+      color: #4a6a4a;
+    }
+    #diag-toggle-row input { accent-color: #4caf50; cursor: pointer; }
+    #diag-toggle-row label { cursor: pointer; }
+
+    /* ── Scrollbar ── */
+    #chat-container::-webkit-scrollbar { width: 6px; }
+    #chat-container::-webkit-scrollbar-track { background: #1a1a2e; }
+    #chat-container::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+
+    /* ── Welcome message ── */
+    #welcome {
+      align-self: center;
+      text-align: center;
+      color: #37474f;
+      margin-top: 40px;
+      max-width: 400px;
+    }
+    #welcome h2 { font-size: 1.2rem; color: #4fc3f7; margin-bottom: 8px; }
+    #welcome p  { font-size: 0.88rem; line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>✈ MSFS Tour Guide</h1>
+  </header>
+
+  <div id="telemetry-bar">
+    <span id="telem-status">Connecting to telemetry...</span>
+  </div>
+
+  <div id="diag-toggle-row">
+    <input type="checkbox" id="diag-check" />
+    <label for="diag-check">Show diagnostics (step timings)</label>
+  </div>
+
+  <div id="chat-container">
+    <div id="welcome">
+      <h2>Ask me anything about your flight!</h2>
+      <p>
+        Try: "Where are we?", "What is that mountain ahead?",
+        "Tell me the history of this area", "What river is to the north?",
+        or ask about any landmark at any clock position.
+      </p>
+    </div>
+  </div>
+
+  <div id="input-area">
+    <input
+      id="question-input"
+      type="text"
+      placeholder="Ask a question about your flight..."
+      autocomplete="off"
+    />
+    <button id="ask-btn" onclick="sendQuestion()">Ask</button>
+    <button id="clear-btn" onclick="clearHistory()" title="Clear conversation history">Clear</button>
+  </div>
+
+  <script>
+    // ── Telemetry polling ──────────────────────────────────────────────────────
+
+    function formatTelemetry(data) {
+      const bar = document.getElementById('telemetry-bar');
+
+      const vs = data.vertical_speed > 50 ? `↑${Math.round(data.vertical_speed)}` :
+                 data.vertical_speed < -50 ? `↓${Math.abs(Math.round(data.vertical_speed))}` : '';
+
+      const heading = Math.round(data.heading).toString().padStart(3, '0');
+      const cardinal = headingToCardinal(data.heading);
+
+      bar.innerHTML = `
+        <span class="telem-item"><span class="label">ALT </span><span class="value">${Math.round(data.altitude).toLocaleString()} ft</span></span>
+        <span class="telem-item"><span class="label">AGL </span><span class="value">${Math.round(data.altitude_agl).toLocaleString()} ft</span></span>
+        <span class="telem-item"><span class="label">HDG </span><span class="value">${heading}° ${cardinal}</span></span>
+        <span class="telem-item"><span class="label">IAS </span><span class="value">${Math.round(data.airspeed)} kts</span></span>
+        ${vs ? `<span class="telem-item"><span class="label">VS </span><span class="value">${vs} fpm</span></span>` : ''}
+        <span class="telem-item"><span class="label">VIS </span><span class="value">${(data.visibility / 1000).toFixed(1)} km</span></span>
+        <span class="telem-item"><span class="label">AC </span><span class="value">${data.aircraft || '—'}</span></span>
+      `;
+    }
+
+    function headingToCardinal(h) {
+      const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+      return dirs[Math.round(h / 22.5) % 16];
+    }
+
+    async function pollTelemetry() {
+      try {
+        const resp = await fetch('/telemetry');
+        if (resp.ok) {
+          const data = await resp.json();
+          formatTelemetry(data);
+        }
+      } catch (e) {
+        document.getElementById('telemetry-bar').innerHTML =
+          '<span id="telem-status">Telemetry unavailable</span>';
+      }
+    }
+
+    setInterval(pollTelemetry, 2000);
+    pollTelemetry();
+
+    // ── Chat ───────────────────────────────────────────────────────────────────
+
+    const chatContainer = document.getElementById('chat-container');
+    const input         = document.getElementById('question-input');
+    const askBtn        = document.getElementById('ask-btn');
+    let firstMessage    = true;
+
+    function addMessage(role, text, isThinking = false) {
+      if (firstMessage) {
+        document.getElementById('welcome')?.remove();
+        firstMessage = false;
+      }
+      const div = document.createElement('div');
+      div.className = `message ${role}${isThinking ? ' thinking' : ''}`;
+      div.innerHTML = `
+        <div class="sender">${role === 'user' ? 'You' : 'Guide'}</div>
+        <div class="text">${escapeHtml(text)}</div>
+      `;
+      chatContainer.appendChild(div);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      return div;
+    }
+
+    function renderDiagnostics(diag) {
+      const panel = document.createElement('div');
+      panel.className = 'diag-panel';
+      panel.innerHTML = diag.map(d => {
+        const isTotal = d.step === 'TOTAL';
+        const ms = d.elapsed_ms ? `${d.elapsed_ms}ms` : (d.step === 'TOTAL' ? '' : '—');
+        return `<div class="diag-row${isTotal ? ' diag-total' : ''}">
+          <span class="diag-step">${escapeHtml(d.step)}</span>
+          <span class="diag-ms">${ms}</span>
+          <span class="diag-detail">${escapeHtml(d.detail)}</span>
+        </div>`;
+      }).join('');
+      chatContainer.appendChild(panel);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
+    }
+
+    async function sendQuestion() {
+      const question = input.value.trim();
+      if (!question) return;
+
+      input.value = '';
+      askBtn.disabled = true;
+      input.disabled  = true;
+
+      addMessage('user', question);
+      const thinkingDiv = addMessage('guide', 'Thinking...', true);
+
+      try {
+        const resp = await fetch('/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question }),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json();
+          thinkingDiv.remove();
+          addMessage('guide', `Error: ${err.detail || 'Something went wrong.'}`);
+        } else {
+          const data = await resp.json();
+          thinkingDiv.remove();
+          addMessage('guide', data.answer);
+          if (document.getElementById('diag-check').checked && data.diagnostics) {
+            renderDiagnostics(data.diagnostics);
+          }
+        }
+      } catch (e) {
+        thinkingDiv.remove();
+        addMessage('guide', `Connection error: ${e.message}`);
+      } finally {
+        askBtn.disabled = false;
+        input.disabled  = false;
+        input.focus();
+      }
+    }
+
+    async function clearHistory() {
+      await fetch('/clear', { method: 'POST' });
+      chatContainer.innerHTML = '';
+      firstMessage = true;
+      chatContainer.innerHTML = `
+        <div id="welcome" style="align-self:center;text-align:center;color:#37474f;margin-top:40px;max-width:400px;">
+          <h2 style="font-size:1.2rem;color:#4fc3f7;margin-bottom:8px;">History cleared.</h2>
+          <p style="font-size:0.88rem;line-height:1.6;">Ask me anything about your flight!</p>
+        </div>`;
+    }
+
+    // Submit on Enter
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !askBtn.disabled) sendQuestion();
+    });
+
+    input.focus();
+  </script>
+</body>
+</html>

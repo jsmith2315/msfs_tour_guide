@@ -1,0 +1,22 @@
+# Core
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-dotenv>=1.0.0
+
+# Telemetry
+# Note: If SimConnect doesn't work with MSFS 2024, try: pip install mobiflight-simconnect
+SimConnect>=0.4.4
+
+# Geography
+geopy>=2.4.1
+requests>=2.31.0
+
+# LLM
+ollama>=0.3.0
+
+# Search
+ddgs>=2.0.0
+
+# Voice (deferred — install when ready)
+# openai-whisper
+# pyttsx3
