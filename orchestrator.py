@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 import time
+from datetime import datetime, timezone
 
 import config
 import llm
@@ -53,12 +54,13 @@ class TourGuide:
         self._hist   = ConversationHistory()
 
     def ask(self, question: str) -> dict:
-        """Process a user question. Returns:
-          {
-            "answer": str,
-            "diagnostics": [{"step": str, "detail": str, "elapsed_ms": int}, ...]
-          }
+        """Process a user question. Returns a dict with:
+          - answer, diagnostics (always present)
+          - timestamp, question_type, direction, location, flight_snapshot,
+            search_ran, search_query, overpass_features, mock_mode
+            (structured fields for test/review logging)
         """
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         diag = []
         t_total = time.perf_counter()
 
@@ -69,9 +71,12 @@ class TourGuide:
             return {
                 "answer": "Not connected to the simulator — please start MSFS and load a flight.",
                 "diagnostics": [{"step": "Telemetry", "detail": "SimConnect not connected", "elapsed_ms": 0}],
+                "timestamp": timestamp, "question_type": "UNKNOWN", "direction": None,
+                "location": "", "flight_snapshot": {}, "search_ran": False,
+                "search_query": None, "overpass_features": [], "mock_mode": config.USE_MOCK_TELEMETRY,
             }
         flight = self._telem.snapshot()
-        diag.append(_d("Telemetry", f"lat={flight.lat:.4f} lon={flight.lon:.4f} alt={flight.altitude:.0f}ft hdg={flight.heading:.0f}°", t))
+        diag.append(_d("Telemetry", f"lat={flight.lat:.4f} lon={flight.lon:.4f} alt={flight.altitude:.0f}ft hdg={flight.heading:.0f}", t))
 
         # 2. Classify the question
         t = time.perf_counter()
@@ -95,19 +100,28 @@ class TourGuide:
         geo_text = geo.context_to_text(geo_ctx)
         diag.append(_d("Geo lookup", geo_text.split("\n")[0], t))  # first line as summary
 
+        # Extract location name and overpass features for structured logging
+        location = (
+            geo_ctx.get("look_point", {}).get("geocode", {}).get("display_name")
+            or geo_ctx.get("position", {}).get("geocode", {}).get("display_name")
+            or f"{flight.lat:.4f}, {flight.lon:.4f}"
+        )
+        overpass_features = (
+            [f["name"] for f in geo_ctx.get("look_point", {}).get("features", [])]
+            or [f["name"] for f in geo_ctx.get("features_here", [])]
+        )
+
         # 4. Web search (for HISTORY, FEATURE, and GENERAL — cast a wide net)
-        search_text = ""
+        search_text  = ""
+        search_ran   = False
+        search_query = None
         if qtype in ("HISTORY", "FEATURE", "GENERAL"):
             t = time.perf_counter()
-            place_name = (
-                geo_ctx.get("look_point", {}).get("geocode", {}).get("display_name")
-                or geo_ctx.get("position", {}).get("geocode", {}).get("display_name")
-                or f"{flight.lat:.4f}, {flight.lon:.4f}"
-            )
-            search_query = _build_search_query(question, place_name, qtype)
+            search_query = _build_search_query(question, location, qtype)
             results = search_mod.web_search(search_query)
             search_text = search_mod.results_to_text(results)
-            diag.append(_d("Web search", f'"{search_query}" → {len(results)} results', t))
+            search_ran  = True
+            diag.append(_d("Web search", f'"{search_query}" ({len(results)} results)', t))
         else:
             diag.append({"step": "Web search", "detail": "skipped (not needed for this question type)", "elapsed_ms": 0})
 
@@ -144,7 +158,29 @@ class TourGuide:
         total_ms = int((time.perf_counter() - t_total) * 1000)
         diag.append({"step": "TOTAL", "detail": "", "elapsed_ms": total_ms})
 
-        return {"answer": response, "diagnostics": diag}
+        return {
+            "answer":      response,
+            "diagnostics": diag,
+            # Structured fields for test/review logging
+            "timestamp":         timestamp,
+            "question_type":     qtype,
+            "direction":         direction,
+            "location":          location,
+            "flight_snapshot":   {
+                "lat":       round(flight.lat, 5),
+                "lon":       round(flight.lon, 5),
+                "altitude":  round(flight.altitude),
+                "agl":       round(flight.altitude_agl),
+                "heading":   round(flight.heading),
+                "airspeed":  round(flight.airspeed),
+                "aircraft":  flight.aircraft,
+                "on_ground": flight.on_ground,
+            },
+            "search_ran":        search_ran,
+            "search_query":      search_query,
+            "overpass_features": overpass_features,
+            "mock_mode":         config.USE_MOCK_TELEMETRY,
+        }
 
     def clear_history(self):
         self._hist.clear()

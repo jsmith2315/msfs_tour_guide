@@ -179,6 +179,23 @@
     #diag-toggle-row input { accent-color: #4caf50; cursor: pointer; }
     #diag-toggle-row label { cursor: pointer; }
 
+    /* ── Save to Log button (TEST_MODE only) ── */
+    .save-log-btn {
+      background: transparent;
+      border: 1px solid #37474f;
+      border-radius: 4px;
+      color: #546e7a;
+      cursor: pointer;
+      font-size: 0.72rem;
+      padding: 3px 9px;
+      margin-top: 2px;
+      align-self: flex-start;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .save-log-btn:hover    { background: #0d1b2a; color: #90a4ae; border-color: #546e7a; }
+    .save-log-btn.saved    { color: #4caf50; border-color: #2e7d32; cursor: default; }
+    .save-log-btn:disabled { opacity: 1; cursor: default; }
+
     /* ── Scrollbar ── */
     #chat-container::-webkit-scrollbar { width: 6px; }
     #chat-container::-webkit-scrollbar-track { background: #1a1a2e; }
@@ -282,6 +299,11 @@
     setInterval(pollTelemetry, 2000);
     pollTelemetry();
 
+    // ── Test mode ──────────────────────────────────────────────────────────────
+
+    let testMode = false;
+    fetch('/config').then(r => r.json()).then(cfg => { testMode = !!cfg.test_mode; });
+
     // ── Chat ───────────────────────────────────────────────────────────────────
 
     const chatContainer = document.getElementById('chat-container');
@@ -321,6 +343,48 @@
       chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
+    function addSaveButton(data) {
+      const btn = document.createElement('button');
+      btn.className = 'save-log-btn';
+      btn.textContent = 'Save to Log';
+      btn.onclick = async () => {
+        btn.disabled = true;
+        const entry = {
+          timestamp:         data.timestamp,
+          question:          data.question,
+          answer:            data.answer,
+          question_type:     data.question_type,
+          direction:         data.direction,
+          location:          data.location,
+          flight:            data.flight_snapshot,
+          search_ran:        data.search_ran,
+          search_query:      data.search_query,
+          overpass_features: data.overpass_features,
+          steps:             data.diagnostics,
+          mock_mode:         data.mock_mode,
+        };
+        try {
+          const resp = await fetch('/save-log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(entry),
+          });
+          if (resp.ok) {
+            btn.textContent = 'Saved';
+            btn.classList.add('saved');
+          } else {
+            btn.textContent = 'Error saving';
+            btn.disabled = false;
+          }
+        } catch (e) {
+          btn.textContent = 'Error saving';
+          btn.disabled = false;
+        }
+      };
+      chatContainer.appendChild(btn);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
     function escapeHtml(text) {
       return text
         .replace(/&/g, '&amp;')
@@ -357,6 +421,9 @@
           addMessage('guide', data.answer);
           if (document.getElementById('diag-check').checked && data.diagnostics) {
             renderDiagnostics(data.diagnostics);
+          }
+          if (testMode) {
+            addSaveButton(data);
           }
         }
       } catch (e) {

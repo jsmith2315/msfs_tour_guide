@@ -41,3 +41,9 @@ HISTORY_MAX_TURNS = 10         # How many Q&A pairs to keep in context
 # ── Web server ────────────────────────────────────────────────────────────────
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8000
+
+# ── Test / review mode ────────────────────────────────────────────────────────
+# When True, a "Save to Log" button appears in the UI after each answer.
+# Clicking it appends a structured JSON entry to LOG_FILE for later review.
+TEST_MODE = True
+LOG_FILE  = "review_log.jsonl"
