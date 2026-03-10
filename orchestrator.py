@@ -64,6 +64,12 @@ class TourGuide:
 
         # 1. Get current flight data
         t = time.perf_counter()
+        # Bail out early if SimConnect is not connected
+        if hasattr(self._telem, "connected") and not self._telem.connected:
+            return {
+                "answer": "Not connected to the simulator — please start MSFS and load a flight.",
+                "diagnostics": [{"step": "Telemetry", "detail": "SimConnect not connected", "elapsed_ms": 0}],
+            }
         flight = self._telem.snapshot()
         diag.append(_d("Telemetry", f"lat={flight.lat:.4f} lon={flight.lon:.4f} alt={flight.altitude:.0f}ft hdg={flight.heading:.0f}°", t))
 

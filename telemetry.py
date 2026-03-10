@@ -198,6 +198,12 @@ class SimConnectTelemetry:
         except Exception:
             pass
 
+        # When MSFS closes, SimConnect stops raising and just returns zeros.
+        # Lat=0 and lon=0 simultaneously is a reliable disconnection signal
+        # (no real airport or flight is at 0°N, 0°E).
+        if data.lat == 0.0 and data.lon == 0.0:
+            raise ConnectionError("Telemetry all-zero — simulator likely disconnected")
+
         return data
 
     # ── public API ─────────────────────────────────────────────────────────────
