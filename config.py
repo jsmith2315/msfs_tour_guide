@@ -2,8 +2,8 @@
 # Change values here to tune behaviour without touching any logic files.
 
 # ── Ollama models ─────────────────────────────────────────────────────────────
-CLASSIFIER_MODEL = "llama3.1:8b"  # Same model for both — avoids Ollama reload penalty
-ANSWER_MODEL     = "llama3.1:8b"  # Quality answer model
+CLASSIFIER_MODEL = "llama3.2:latest"  # Same model for both — avoids Ollama reload penalty
+ANSWER_MODEL     = "llama3.2:latest"  # Quality answer model
 # Other available models: llama3.2:latest (2GB, faster), dolphin-mixtral:8x7b (26GB, best quality)
 OLLAMA_BASE_URL  = "http://localhost:11434"
 
