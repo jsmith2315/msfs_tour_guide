@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 import time
+import threading
 from dataclasses import dataclass, asdict
 from typing import Optional
 
@@ -99,10 +100,17 @@ class MockTelemetry:
 
 # ── SimConnect telemetry ───────────────────────────────────────────────────────
 
-class SimConnectTelemetry:
-    """Reads live flight data from MSFS 2024 via SimConnect."""
+_SIMCONNECT_RETRY_SEC = 20  # seconds between reconnect attempts
 
-    # Map FlightData field → SimConnect variable name (underscores, as used by the Python lib)
+class SimConnectTelemetry:
+    """Reads live flight data from MSFS 2024 via SimConnect.
+
+    Starts immediately regardless of whether MSFS is running.  A background
+    thread keeps trying to (re)connect every 20 seconds.  snapshot() always
+    returns the latest data; check .connected to know if it's live.
+    """
+
+    # Map FlightData field → SimConnect variable name
     _VARS = {
         "lat":            "PLANE_LATITUDE",
         "lon":            "PLANE_LONGITUDE",
@@ -119,54 +127,95 @@ class SimConnectTelemetry:
     }
 
     def __init__(self):
-        try:
-            from SimConnect import SimConnect, AircraftRequests
-            self._sm = SimConnect()
-            self._aq = AircraftRequests(self._sm, _time=2000)
-            print("[SimConnectTelemetry] Connected to MSFS.")
-        except Exception as e:
-            raise ConnectionError(
-                f"Could not connect to MSFS SimConnect: {e}\n"
-                "Make sure MSFS 2024 is running and SimConnect is enabled."
-            ) from e
+        self._lock      = threading.Lock()
+        self._data      = FlightData()   # last known good snapshot
+        self._connected = False
+        self._stop      = threading.Event()
+        self._thread    = threading.Thread(target=self._run, daemon=True, name="SimConnectPoller")
+        self._thread.start()
 
-    def snapshot(self) -> FlightData:
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
+    # ── background thread ──────────────────────────────────────────────────────
+
+    def _run(self):
+        while not self._stop.is_set():
+            sm = aq = None
+            try:
+                from SimConnect import SimConnect, AircraftRequests
+                sm = SimConnect()
+                aq = AircraftRequests(sm, _time=2000)
+                self._connected = True
+                print("[SimConnectTelemetry] Connected to MSFS.", flush=True)
+
+                # Poll loop — runs until an error or stop request
+                while not self._stop.is_set():
+                    try:
+                        snap = self._read(aq)
+                        with self._lock:
+                            self._data = snap
+                    except Exception as e:
+                        print(f"[SimConnectTelemetry] Poll error: {e}", flush=True)
+                        break
+                    self._stop.wait(config.TELEMETRY_POLL_INTERVAL_SEC)
+
+            except Exception as e:
+                print(f"[SimConnectTelemetry] Cannot connect: {e}", flush=True)
+            finally:
+                self._connected = False
+                if sm is not None:
+                    try:
+                        sm.exit()
+                    except Exception:
+                        pass
+
+            if not self._stop.is_set():
+                print(f"[SimConnectTelemetry] Retrying in {_SIMCONNECT_RETRY_SEC}s...", flush=True)
+                self._stop.wait(_SIMCONNECT_RETRY_SEC)
+
+    def _read(self, aq) -> FlightData:
+        """Read one snapshot from SimConnect. Raises on critical failure."""
         data = FlightData()
         for field, var_name in self._VARS.items():
             try:
-                val = self._aq.get(var_name)
+                val = aq.get(var_name)
                 if val is not None:
                     setattr(data, field, float(val))
             except Exception:
-                pass  # leave default value if a variable fails
+                pass
 
-        # Aircraft title is a string, handle separately
         try:
-            title = self._aq.get("TITLE")
+            title = aq.get("TITLE")
             data.aircraft = str(title) if title else "Unknown"
         except Exception:
             data.aircraft = "Unknown"
 
-        # on_ground is a bool
         try:
-            og = self._aq.get("SIM_ON_GROUND")
+            og = aq.get("SIM_ON_GROUND")
             data.on_ground = bool(og)
         except Exception:
             pass
 
         return data
 
+    # ── public API ─────────────────────────────────────────────────────────────
+
+    def snapshot(self) -> FlightData:
+        with self._lock:
+            return self._data
+
     def close(self):
-        try:
-            self._sm.exit()
-        except Exception:
-            pass
+        self._stop.set()
 
 
 # ── Factory function ───────────────────────────────────────────────────────────
 
 def get_telemetry_source() -> MockTelemetry | SimConnectTelemetry:
-    """Return the appropriate telemetry source based on config."""
+    """Return the appropriate telemetry source based on config.
+    SimConnectTelemetry starts a background thread and returns immediately —
+    it will connect to MSFS whenever it becomes available."""
     if config.USE_MOCK_TELEMETRY:
         return MockTelemetry(config.MOCK_LOCATION_NAME)
     return SimConnectTelemetry()

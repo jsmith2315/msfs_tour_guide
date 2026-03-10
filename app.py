@@ -20,6 +20,7 @@ from pydantic import BaseModel
 import uvicorn
 
 import config
+import llm
 from orchestrator import TourGuide
 
 # ── App state ──────────────────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ _guide: TourGuide | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _guide
+    llm.warmup()       # load model into Ollama VRAM before first question
     _guide = TourGuide()
     yield
     if _guide:
@@ -66,8 +68,10 @@ def root():
 def get_telemetry():
     if _guide is None:
         raise HTTPException(503, "Tour guide not initialised")
-    data = _guide._telem.snapshot()
-    return data.to_dict()
+    result = _guide._telem.snapshot().to_dict()
+    # Add connection state so the UI can show "waiting for simulator"
+    result["sim_connected"] = getattr(_guide._telem, "connected", True)
+    return result
 
 
 @app.post("/ask", response_model=AskResponse)

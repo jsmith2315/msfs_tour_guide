@@ -239,6 +239,11 @@
     function formatTelemetry(data) {
       const bar = document.getElementById('telemetry-bar');
 
+      if (!data.sim_connected) {
+        bar.innerHTML = '<span id="telem-status">Waiting for simulator...</span>';
+        return;
+      }
+
       const vs = data.vertical_speed > 50 ? `↑${Math.round(data.vertical_speed)}` :
                  data.vertical_speed < -50 ? `↓${Math.abs(Math.round(data.vertical_speed))}` : '';
 

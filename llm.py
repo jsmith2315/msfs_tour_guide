@@ -13,6 +13,22 @@ import ollama
 import config
 
 
+def warmup():
+    """Load the model into Ollama's memory at startup so the first real request
+    doesn't pay the cold-load penalty.  keep_alive=-1 keeps it resident until
+    the Ollama server is restarted or explicitly unloaded."""
+    models_needed = {config.CLASSIFIER_MODEL, config.ANSWER_MODEL}
+    for model in models_needed:
+        print(f"[LLM] Warming up {model}...", flush=True)
+        ollama.chat(
+            model=model,
+            messages=[{"role": "user", "content": "hi"}],
+            options={"temperature": 0.0},
+            keep_alive=-1,
+        )
+    print("[LLM] Models ready.", flush=True)
+
+
 def _chat(model: str, system: str, user: str) -> str:
     """Send a chat request to Ollama and return the assistant's reply as a string."""
     response = ollama.chat(
@@ -22,6 +38,7 @@ def _chat(model: str, system: str, user: str) -> str:
             {"role": "user",   "content": user},
         ],
         options={"temperature": 0.3},  # lower = more factual, less creative
+        keep_alive=-1,                 # keep model in VRAM between calls
     )
     return response["message"]["content"].strip()
 
