@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
     yield
     if _guide:
         _guide.close()
+    llm.unload()  # evict models from VRAM on clean shutdown
 
 
 app = FastAPI(title="MSFS Tour Guide", lifespan=lifespan)
